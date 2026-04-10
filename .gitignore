@@ -1,0 +1,19 @@
+# Output files from scripts
+subdomains_*.txt
+dns_records_*.txt
+whois_*.txt
+recon_*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
