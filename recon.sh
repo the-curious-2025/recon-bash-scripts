@@ -55,7 +55,6 @@ echo ""
 
 echo "=========================================="
 echo "Reconnaissance complete!"
-echo "Results saved to: $RECON_DIR"
 echo "=========================================="
 echo ""
 echo "Files generated:"

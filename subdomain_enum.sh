@@ -37,7 +37,8 @@ echo "[*] Attempting reverse DNS lookup..."
 if command -v dig &> /dev/null; then
     dig +short ns "$DOMAIN" | while read ns; do
         if [ -n "$ns" ]; then
-            dig @"$ns" axfr "$DOMAIN" 2>/dev/null | grep -oP '^[^\s]+' | grep "\.$DOMAIN" >> /tmp/axfr_subs.txt 2>/dev/null || true
+            dig @"$ns" axfr "$DOMAIN" 2>/dev/null | grep -oP '^[^
+]*' | grep "\.$DOMAIN" >> /tmp/axfr_subs.txt 2>/dev/null || true
         fi
     done
 fi
@@ -49,6 +50,7 @@ cat /tmp/ct_subs.txt /tmp/common_subs.txt /tmp/axfr_subs.txt 2>/dev/null | sort 
 # Clean up
 rm -f /tmp/ct_subs.txt /tmp/common_subs.txt /tmp/axfr_subs.txt
 
-echo "[+] Enumeration complete"
-echo "[+] Found $(wc -l < "$OUTPUT_FILE") potential subdomains"
-echo "[+] Results saved to $OUTPUT_FILE"
+echo "[*] Subdomain enumeration complete"
+echo "[*] Results saved to $OUTPUT_FILE"
+echo ""
+echo "Found $(wc -l < "$OUTPUT_FILE") subdomains"

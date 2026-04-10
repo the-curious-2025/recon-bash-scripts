@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# WHOIS Lookup
+# Whois Lookup
 # Performs whois lookups and extracts key information
 
 if [ -z "$1" ]; then
@@ -28,7 +28,6 @@ echo "[+] Full results saved to $OUTPUT_FILE"
 echo ""
 echo "=== Key Information ===="
 
-# Extract key information
 echo ""
 echo "Domain Name:"
 grep -i "domain name" "$OUTPUT_FILE" | head -1 || echo "Not found"
@@ -48,7 +47,3 @@ grep -i "expiration date\|expire date\|registry expiry" "$OUTPUT_FILE" | head -1
 echo ""
 echo "Nameservers:"
 grep -i "name server\|nameserver" "$OUTPUT_FILE" || echo "Not found"
-
-echo ""
-echo "Registrant Contact:"
-grep -i "registrant" "$OUTPUT_FILE" | head -5 || echo "Not found"
