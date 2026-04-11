@@ -1,89 +1,83 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# DNS Records Extraction
-# Extracts and displays DNS records for a domain
+set -euo pipefail
 
-set -e
-
-if [ -z "$1" ]; then
-    echo "Usage: $0 <domain> [record_type]"
-    echo "Record types: A, AAAA, CNAME, MX, NS, TXT, SOA, or ALL (default)"
-    exit 1
-fi
-
-DOMAIN=$1
-RECORD_TYPE=${2:-ALL}
-OUTPUT_FILE="dns_records_${DOMAIN}.txt"
-
-echo "Extracting DNS records for $DOMAIN"
-echo ""
-
-if ! command -v dig &> /dev/null; then
-    echo "Error: dig command not found"
-    echo "Install with: apt-get install dnsutils (Debian/Ubuntu) or brew install bind (macOS)"
-    exit 1
-fi
-
-# Create output file header
-{
-    echo "========================"
-    echo "DNS Records for: $DOMAIN"
-    echo "========================"
-    echo "Generated: $(date)"
-    echo ""
-} > "$OUTPUT_FILE"
-
-# Function to query a record type
-query_record() {
-    local type=$1
-    echo "[*] Querying $type records..."
-    echo "" >> "$OUTPUT_FILE"
-    echo "=== $type Records ===" >> "$OUTPUT_FILE"
-    dig +short "$DOMAIN" "$type" >> "$OUTPUT_FILE" 2>/dev/null || true
-    echo "" >> "$OUTPUT_FILE"
+usage() {
+  echo "Usage: $0 <domain> [record_type] [-o output_file]"
+  echo "Record types: A, AAAA, CNAME, MX, NS, TXT, SOA, ALL (default)"
+  exit 1
 }
 
-# Query based on type
-case "$RECORD_TYPE" in
-    A)
-        query_record "A"
-        ;;
-    AAAA)
-        query_record "AAAA"
-        ;;
-    CNAME)
-        query_record "CNAME"
-        ;;
-    MX)
-        query_record "MX"
-        ;;
-    NS)
-        query_record "NS"
-        ;;
-    TXT)
-        query_record "TXT"
-        ;;
-    SOA)
-        query_record "SOA"
-        ;;
-    ALL)
-        query_record "A"
-        query_record "AAAA"
-        query_record "CNAME"
-        query_record "MX"
-        query_record "NS"
-        query_record "TXT"
-        query_record "SOA"
-        ;;
+if [[ $# -lt 1 ]]; then
+  usage
+fi
+
+DOMAIN="$1"
+shift
+
+RECORD_TYPE="ALL"
+if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
+  RECORD_TYPE="$1"
+  shift
+fi
+
+OUTPUT_FILE="dns_records_${DOMAIN}.txt"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o|--output)
+      OUTPUT_FILE="$2"
+      shift 2
+      ;;
     *)
-        echo "Unknown record type: $RECORD_TYPE"
-        exit 1
-        ;;
+      echo "Unknown option: $1"
+      usage
+      ;;
+  esac
+done
+
+if ! command -v dig >/dev/null 2>&1; then
+  echo "Error: dig command not found"
+  echo "Install with: apt-get install dnsutils (Debian/Ubuntu) or brew install bind (macOS)"
+  exit 1
+fi
+
+mkdir -p "$(dirname "$OUTPUT_FILE")"
+
+{
+  echo "========================"
+  echo "DNS Records for: $DOMAIN"
+  echo "========================"
+  echo "Generated: $(date)"
+  echo
+} > "$OUTPUT_FILE"
+
+query_record() {
+  local type="$1"
+  echo "[*] Querying $type records..."
+  {
+    echo
+    echo "=== $type Records ==="
+    dig +short "$DOMAIN" "$type" 2>/dev/null || true
+  } >> "$OUTPUT_FILE"
+}
+
+case "${RECORD_TYPE^^}" in
+  A|AAAA|CNAME|MX|NS|TXT|SOA)
+    query_record "${RECORD_TYPE^^}"
+    ;;
+  ALL)
+    for t in A AAAA CNAME MX NS TXT SOA; do
+      query_record "$t"
+    done
+    ;;
+  *)
+    echo "Unknown record type: $RECORD_TYPE"
+    usage
+    ;;
 esac
 
 echo "[+] DNS records extraction complete"
 echo "[+] Results saved to $OUTPUT_FILE"
-echo ""
-
-# Display results
+echo
 cat "$OUTPUT_FILE"

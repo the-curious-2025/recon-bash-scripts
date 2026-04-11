@@ -1,61 +1,57 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Recon Master Script
-# Runs all recon scripts on a target domain
+set -euo pipefail
 
-set -e
+usage() {
+  echo "Usage: $0 <domain> [output_directory]"
+  exit 1
+}
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 <domain>"
-    exit 1
+if [[ $# -lt 1 ]]; then
+  usage
 fi
 
-DOMAIN=$1
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RECON_DIR="recon_${DOMAIN}_${TIMESTAMP}"
+DOMAIN="$1"
+OUTPUT_BASE="${2:-.}"
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+RECON_DIR="${OUTPUT_BASE%/}/recon_${DOMAIN}_${TIMESTAMP}"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$RECON_DIR"
 
-echo "=========================================="
-echo "Starting full reconnaissance on $DOMAIN"
-echo "=========================================="
-echo ""
+run_step() {
+  local title="$1"
+  shift
+  echo "$title"
+  if "$@"; then
+    echo "[OK] $title"
+  else
+    echo "[WARN] $title failed"
+  fi
+  echo
+}
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "=========================================="
+echo "Starting reconnaissance on ${DOMAIN}"
+echo "Output directory: ${RECON_DIR}"
+echo "=========================================="
+echo
 
-# Run subdomain enumeration
-echo "[1/3] Subdomain Enumeration..."
-if [ -f "$SCRIPT_DIR/subdomain_enum.sh" ]; then
-    bash "$SCRIPT_DIR/subdomain_enum.sh" "$DOMAIN"
-    mv "subdomains_${DOMAIN}.txt" "$RECON_DIR/" 2>/dev/null || true
-else
-    echo "Warning: subdomain_enum.sh not found"
+run_step "[1/3] Subdomain Enumeration" \
+  bash "$SCRIPT_DIR/subdomain_enum.sh" "$DOMAIN" -o "$RECON_DIR/subdomains_${DOMAIN}.txt"
+
+run_step "[2/3] DNS Records Extraction" \
+  bash "$SCRIPT_DIR/dns_records.sh" "$DOMAIN" ALL -o "$RECON_DIR/dns_records_${DOMAIN}.txt"
+
+run_step "[3/3] WHOIS Lookup" \
+  bash "$SCRIPT_DIR/whois_lookup.sh" "$DOMAIN" -o "$RECON_DIR/whois_${DOMAIN}.txt"
+
+echo "=========================================="
+echo "Reconnaissance complete"
+echo "Results saved to: $RECON_DIR"
+echo "=========================================="
+echo
+
+if command -v ls >/dev/null 2>&1; then
+  ls -lh "$RECON_DIR"
 fi
-echo ""
-
-# Run DNS records extraction
-echo "[2/3] DNS Records Extraction..."
-if [ -f "$SCRIPT_DIR/dns_records.sh" ]; then
-    bash "$SCRIPT_DIR/dns_records.sh" "$DOMAIN" ALL > /dev/null 2>&1 || true
-    mv "dns_records_${DOMAIN}.txt" "$RECON_DIR/" 2>/dev/null || true
-else
-    echo "Warning: dns_records.sh not found"
-fi
-echo ""
-
-# Run WHOIS lookup
-echo "[3/3] WHOIS Lookup..."
-if [ -f "$SCRIPT_DIR/whois_lookup.sh" ]; then
-    bash "$SCRIPT_DIR/whois_lookup.sh" "$DOMAIN" > "$RECON_DIR/whois_${DOMAIN}.txt" 2>&1 || true
-else
-    echo "Warning: whois_lookup.sh not found"
-fi
-echo ""
-
-echo "=========================================="
-echo "Reconnaissance complete!"
-echo "=========================================="
-echo ""
-echo "Files generated:"
-ls -lh "$RECON_DIR"

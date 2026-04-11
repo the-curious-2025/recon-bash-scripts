@@ -1,56 +1,86 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Subdomain Enumeration
-# Uses multiple methods to enumerate subdomains
+set -euo pipefail
 
-set -e
+usage() {
+  echo "Usage: $0 <domain> [-o output_file]"
+  exit 1
+}
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 <domain>"
-    exit 1
+if [[ $# -lt 1 ]]; then
+  usage
 fi
 
-DOMAIN=$1
+DOMAIN="$1"
+shift || true
 OUTPUT_FILE="subdomains_${DOMAIN}.txt"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o|--output)
+      OUTPUT_FILE="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      usage
+      ;;
+  esac
+done
+
+if ! command -v nslookup >/dev/null 2>&1; then
+  echo "Error: nslookup command not found"
+  exit 1
+fi
+
+TMP_CT="$(mktemp)"
+TMP_COMMON="$(mktemp)"
+TMP_AXFR="$(mktemp)"
+trap 'rm -f "$TMP_CT" "$TMP_COMMON" "$TMP_AXFR"' EXIT
 
 echo "Starting subdomain enumeration for $DOMAIN"
 echo "Results will be saved to $OUTPUT_FILE"
-echo ""
+echo
 
-# Method 1: Using crt.sh (Certificate Transparency)
 echo "[*] Querying Certificate Transparency logs..."
-curl -s "https://crt.sh/?q=%25.$DOMAIN&output=json" 2>/dev/null | grep -oP '(?<=name_value")[^"]*' | sed 's/\*.//g' | sort -u > /tmp/ct_subs.txt 2>/dev/null || true
-
-# Method 2: Using DNS brute force with common subdomains
-echo "[*] Testing common subdomains..."
-COMMON_SUBS=("www" "mail" "ftp" "localhost" "webmail" "smtp" "pop" "ns1" "webdisk" "ns2" "cpanel" "cPanel" "whm" "autodiscover" "webdisk" "h5.webdisk" "repository")
-
-for sub in "${COMMON_SUBS[@]}"; do
-    HOST="$sub.$DOMAIN"
-    if nslookup "$HOST" 8.8.8.8 >/dev/null 2>&1; then
-        echo "$HOST" >> /tmp/common_subs.txt 2>/dev/null || true
-    fi
-done
-
-# Method 3: Try to get subdomains from reverse DNS
-echo "[*] Attempting reverse DNS lookup..."
-if command -v dig &> /dev/null; then
-    dig +short ns "$DOMAIN" | while read ns; do
-        if [ -n "$ns" ]; then
-            dig @"$ns" axfr "$DOMAIN" 2>/dev/null | grep -oP '^[^
-]*' | grep "\.$DOMAIN" >> /tmp/axfr_subs.txt 2>/dev/null || true
-        fi
-    done
+if command -v curl >/dev/null 2>&1; then
+  curl -s "https://crt.sh/?q=%25.${DOMAIN}&output=json" \
+    | grep -oE '"name_value":"[^"]+"' \
+    | sed -E 's/"name_value":"//; s/"$//; s/\\n/\n/g' \
+    | sed 's/^\*\.//' \
+    | grep -E "\.${DOMAIN}$|^${DOMAIN}$" \
+    | sort -u > "$TMP_CT" || true
 fi
 
-# Combine all results
-> "$OUTPUT_FILE"
-cat /tmp/ct_subs.txt /tmp/common_subs.txt /tmp/axfr_subs.txt 2>/dev/null | sort -u | grep -v "^$" >> "$OUTPUT_FILE" || true
+echo "[*] Testing common subdomains..."
+COMMON_SUBS=(
+  "www" "mail" "ftp" "api" "admin" "dev" "test" "staging"
+  "blog" "shop" "ns1" "ns2" "smtp" "webmail" "cpanel"
+)
 
-# Clean up
-rm -f /tmp/ct_subs.txt /tmp/common_subs.txt /tmp/axfr_subs.txt
+for sub in "${COMMON_SUBS[@]}"; do
+  HOST="${sub}.${DOMAIN}"
+  if nslookup "$HOST" >/dev/null 2>&1; then
+    echo "$HOST" >> "$TMP_COMMON"
+  fi
+done
 
-echo "[*] Subdomain enumeration complete"
-echo "[*] Results saved to $OUTPUT_FILE"
-echo ""
-echo "Found $(wc -l < "$OUTPUT_FILE") subdomains"
+echo "[*] Attempting DNS zone transfer checks..."
+if command -v dig >/dev/null 2>&1; then
+  while IFS= read -r ns; do
+    [[ -z "$ns" ]] && continue
+    dig @"$ns" axfr "$DOMAIN" +time=2 +tries=1 2>/dev/null \
+      | awk '{print $1}' \
+      | grep -E "\.${DOMAIN}\\.$|^${DOMAIN}\\.$" \
+      | sed 's/\.$//' >> "$TMP_AXFR" || true
+  done < <(dig +short ns "$DOMAIN" 2>/dev/null)
+fi
+
+mkdir -p "$(dirname "$OUTPUT_FILE")"
+cat "$TMP_CT" "$TMP_COMMON" "$TMP_AXFR" 2>/dev/null \
+  | sed '/^$/d' \
+  | sort -u > "$OUTPUT_FILE"
+
+echo "[+] Enumeration complete"
+echo "[+] Found $(wc -l < "$OUTPUT_FILE") potential subdomains"
+echo "[+] Results saved to $OUTPUT_FILE"
