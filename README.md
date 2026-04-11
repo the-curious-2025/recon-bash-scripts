@@ -1,13 +1,13 @@
 # Recon Bash Scripts
 
-Command-line recon toolkit for domain-level information gathering.
+Small Bash toolkit for basic domain reconnaissance.
 
-## Included Scripts
+## Included scripts
 
-- `subdomain_enum.sh` subdomain discovery (CT logs + common names + DNS checks)
-- `dns_records.sh` DNS record extraction (`A`, `MX`, `TXT`, etc.)
-- `whois_lookup.sh` WHOIS export with key summary
-- `recon.sh` orchestrator that runs all scripts and stores output in one directory
+- `recon.sh` run the full flow and collect results in one folder
+- `subdomain_enum.sh` collect potential subdomains
+- `dns_records.sh` query DNS records
+- `whois_lookup.sh` fetch WHOIS details
 
 ## Requirements
 
@@ -17,21 +17,21 @@ Command-line recon toolkit for domain-level information gathering.
 - `dig`
 - `whois`
 
-Install on Debian/Ubuntu:
+Debian/Ubuntu setup:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y curl dnsutils whois
 ```
 
-## Quick Start
+## Quick start
 
 ```bash
 chmod +x *.sh
 ./recon.sh example.com
 ```
 
-Output folder format:
+Expected output directory:
 
 ```text
 recon_example.com_YYYYMMDD_HHMMSS/
@@ -40,23 +40,24 @@ recon_example.com_YYYYMMDD_HHMMSS/
    whois_example.com.txt
 ```
 
-## Individual Usage
+## Run scripts individually
 
 ```bash
-./subdomain_enum.sh example.com
 ./subdomain_enum.sh example.com -o out/subdomains.txt
-
-./dns_records.sh example.com
 ./dns_records.sh example.com MX -o out/dns_mx.txt
-
-./whois_lookup.sh example.com
 ./whois_lookup.sh example.com -o out/whois.txt
 ```
 
-## Safety
+## Common issues
 
-Use only on domains you own or are explicitly authorized to assess.
+- **`dig` not found**: install `dnsutils` (Linux) or `bind` (macOS).
+- **No subdomains found**: target may have limited public footprint.
+- **WHOIS output is sparse**: some registrars redact details.
+
+## Responsible use
+
+Use only on domains you own or have explicit authorization to assess.
 
 ## License
 
-MIT (see `LICENSE`).
+MIT.
